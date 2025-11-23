@@ -13,7 +13,7 @@ pipeline {
         PORT = "8081" // 컨테이너와 연결할 포트
 
         REMOTE_USER = "ec2-user" // 원격(spring) 서버 사용자
-        REMOTE_HOST = "121.160.41.220" // 원격(spring) 서버 IP (public ip)
+        REMOTE_HOST = "43.200.25.231" // 원격(spring) 서버 IP (public ip)
 
         REMOTE_DIR = "/home/ec2-user/deploy" // 원격 서버에 파일 복사할 경로
         SSH_CREDENTIALS_ID = "dd869870-7a30-428d-b321-ef2b2a7cb65d"
