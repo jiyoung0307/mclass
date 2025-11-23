@@ -18,6 +18,9 @@ pipeline {
         REMOTE_DIR = "/home/ec2-user/deploy" // 원격 서버에 파일 복사할 경로
         SSH_CREDENTIALS_ID = "dd869870-7a30-428d-b321-ef2b2a7cb65d"
         // Jenkins SSH 자격 증명 ID
+
+        // Jenkins Secret File ID(credential id)
+        SECRET_FILE_ID = "29242236-b537-4876-8390-cd3f3c2384ab"
     }
 
     // 단계별로 실행될 코드 작성
@@ -44,14 +47,28 @@ pipeline {
             }
         }
 
+        stage('Inject Spring Config (Secret File)') {
+            steps {
+                withCredentials([file(credentialsId: env.SECRET_FILE_ID, variable: 'SPRING_CONFIG_FILE')]) {
+                    sh """
+                        echo "[INFO] Using secret file: $SPRING_CONFIG_FILE"
+                        cp \$SPRING_CONFIG_FILE ./application-prod.properties
+                    """
+                }
+            }
+        }
+
         stage('Copy to Remote Server') {
             steps {
-                // Jenkins가 원격 서버에 SSH 접속할 수 있도록 sshagent 사용
                 sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
-                    // 원격 서버에 배포 디렉토리 생성(없으면 새로 만듦)
-                    sh "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${REMOTE_USER}@${REMOTE_HOST} \"mkdir -p ${REMOTE_DIR}\""
-                    // Jar 파일과 Dockerfile을 원격 서버에 복사
-                    sh "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${JAR_FILE_NAME} Dockerfile ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${REMOTE_USER}@${REMOTE_HOST} "mkdir -p ${REMOTE_DIR}"
+                        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            ${JAR_FILE_NAME} \
+                            application-prod.properties \
+                            Dockerfile \
+                            ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/
+                    """
                 }
             }
         }
@@ -63,8 +80,10 @@ pipeline {
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${REMOTE_USER}@${REMOTE_HOST} << ENDSSH
     cd ${REMOTE_DIR} || exit 1
     docker rm -f ${CONTAINER_NAME} || true
-    docker build -t ${DOCKER_IMAGE} .
-    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:${PORT} ${DOCKER_IMAGE}
+    docker build --build-arg PROFILE=prod -t ${DOCKER_IMAGE} .
+    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:${PORT} \
+        -e SPRING_PROFILES_ACTIVE=prod \
+        ${DOCKER_IMAGE}
 ENDSSH
                     """
                 }
